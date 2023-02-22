@@ -1,0 +1,12 @@
+[package]
+name = "static_file_serving"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+axum = { version = "0.6.7", features = ["query"] }
+axum-server = { version = "0.4.6", features = ["tls-rustls"]}
+axum-extra = { version = "0.5.0", features = ["spa"] }
+tokio = { version = "1.25.0", features = ["full"] }
