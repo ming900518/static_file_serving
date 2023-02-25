@@ -8,5 +8,5 @@ edition = "2021"
 [dependencies]
 axum = { version = "0.6.7", features = ["query"] }
 axum-server = { version = "0.4.6", features = ["tls-rustls"]}
-axum-extra = { version = "0.5.0", features = ["spa"] }
 tokio = { version = "1.25.0", features = ["full"] }
+tokio-util = { version = "0.7.7", features = ["io"] }
