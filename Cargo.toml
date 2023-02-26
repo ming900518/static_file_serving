@@ -6,7 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-axum = { version = "0.6.7", features = ["query"] }
-axum-server = { version = "0.4.6", features = ["tls-rustls"]}
+axum = { version = "0.6.8", features = ["query"] }
 tokio = { version = "1.25.0", features = ["full"] }
 tokio-util = { version = "0.7.7", features = ["io"] }
