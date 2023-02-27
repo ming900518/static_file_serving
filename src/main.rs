@@ -6,41 +6,38 @@ use axum::{
     Router, Server,
 };
 use mimalloc::MiMalloc;
-use std::{
+use std::{collections::HashMap, net::SocketAddr};
+use tokio::{
     fs::{read_dir, File},
-    io::Read,
-    net::SocketAddr,
+    io::AsyncReadExt,
+    sync::OnceCell,
 };
-use tokio::sync::OnceCell;
-
-#[derive(Debug)]
-struct FileCache {
-    file_name: String,
-    file: &'static [u8],
-}
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
-static FILES: OnceCell<Vec<FileCache>> = OnceCell::const_new();
+static FILES: OnceCell<HashMap<String, &[u8]>> = OnceCell::const_new();
 
 #[tokio::main]
 async fn main() {
-    let paths = read_dir("./assets").unwrap();
-    let mut files = Vec::new();
-    for path_result in paths {
-        let path = path_result.unwrap();
-        let mut file = File::open(path.path()).unwrap();
-        let file_name = path.file_name().into_string().unwrap();
-        let mut file_buffer = Vec::new();
-        file.read_to_end(&mut file_buffer).unwrap();
-        let leaked_buffer = Vec::leak(file_buffer);
-        let file_cache = FileCache {
-            file_name,
-            file: leaked_buffer,
-        };
-        files.push(file_cache);
+    let mut paths = read_dir("./assets").await.unwrap();
+    let mut files = HashMap::new();
+    loop {
+        match paths.next_entry().await.unwrap() {
+            Some(path) => {
+                let mut file = File::open(path.path()).await.unwrap();
+                let file_name = path.file_name().into_string().unwrap();
+                let mut file_buffer = Vec::new();
+                file.read_to_end(&mut file_buffer).await.unwrap();
+                let leaked_buffer = Vec::leak(file_buffer);
+                files.insert(file_name, &*leaked_buffer);
+            }
+            None => {
+                files.shrink_to_fit();
+                FILES.set(files).unwrap();
+                break;
+            }
+        }
     }
-    FILES.set(files).unwrap();
     let router = Router::new()
         .route("/sendfile/:req_filename", get(sendfile_api))
         .into_make_service();
@@ -55,10 +52,7 @@ async fn main() {
 
 async fn sendfile_api(Path(req_filename): Path<String>) -> impl IntoResponse {
     let files = FILES.get().unwrap();
-    let file_cache = files
-        .iter()
-        .find(|file_cache| file_cache.file_name == req_filename)
-        .unwrap();
+    let file_cache = *files.get(&req_filename).unwrap();
     let mut headers = HeaderMap::new();
     headers.append(
         header::CONTENT_TYPE,
@@ -70,6 +64,5 @@ async fn sendfile_api(Path(req_filename): Path<String>) -> impl IntoResponse {
             .parse()
             .unwrap(),
     );
-    (headers, file_cache.file)
+    (headers, file_cache)
 }
-
