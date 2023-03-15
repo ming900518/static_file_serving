@@ -1,4 +1,5 @@
 use axum::{
+    body::StreamBody,
     extract::Path,
     http::{header, HeaderMap},
     response::IntoResponse,
@@ -6,38 +7,15 @@ use axum::{
     Router, Server,
 };
 use mimalloc::MiMalloc;
-use std::{collections::HashMap, net::SocketAddr};
-use tokio::{
-    fs::{read_dir, File},
-    io::AsyncReadExt,
-    sync::OnceCell,
-};
+use std::net::SocketAddr;
+use tokio::fs::File;
+use tokio_util::io::ReaderStream;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
-static FILES: OnceCell<HashMap<String, &[u8]>> = OnceCell::const_new();
 
 #[tokio::main]
 async fn main() {
-    let mut paths = read_dir("./assets").await.unwrap();
-    let mut files = HashMap::new();
-    loop {
-        match paths.next_entry().await.unwrap() {
-            Some(path) => {
-                let mut file = File::open(path.path()).await.unwrap();
-                let file_name = path.file_name().into_string().unwrap();
-                let mut file_buffer = Vec::new();
-                file.read_to_end(&mut file_buffer).await.unwrap();
-                let leaked_buffer = Vec::leak(file_buffer);
-                files.insert(file_name, &*leaked_buffer);
-            }
-            None => {
-                files.shrink_to_fit();
-                FILES.set(files).unwrap();
-                break;
-            }
-        }
-    }
     let router = Router::new()
         .route("/sendfile/:req_filename", get(sendfile_api))
         .into_make_service();
@@ -51,8 +29,7 @@ async fn main() {
 }
 
 async fn sendfile_api(Path(req_filename): Path<String>) -> impl IntoResponse {
-    let files = FILES.get().unwrap();
-    let file_cache = *files.get(&req_filename).unwrap();
+    let file = File::open(format!("./assets/{}", req_filename)).await.expect("file not found");
     let mut headers = HeaderMap::new();
     headers.append(
         header::CONTENT_TYPE,
@@ -64,5 +41,7 @@ async fn sendfile_api(Path(req_filename): Path<String>) -> impl IntoResponse {
             .parse()
             .unwrap(),
     );
-    (headers, file_cache)
+    let reader_stream = ReaderStream::new(file);
+    let body = StreamBody::new(reader_stream);
+    (headers, body)
 }
