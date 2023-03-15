@@ -33,6 +33,8 @@ async fn sendfile_api(Path(req_filename): Path<String>) -> impl IntoResponse {
     let file = File::open(format!("./assets/{}", req_filename))
         .await
         .expect("file not found");
+    let buf = vec![0; 4096];
+    let (_, buf) = file.read_at(buf, 0).await;
     let mut headers = HeaderMap::new();
     headers.append(
         header::CONTENT_TYPE,
@@ -44,7 +46,7 @@ async fn sendfile_api(Path(req_filename): Path<String>) -> impl IntoResponse {
             .parse()
             .unwrap(),
     );
-    let reader_stream = ReaderStream::new(file);
+    let reader_stream = ReaderStream::new(buf);
     let body = StreamBody::new(reader_stream);
     (headers, body)
 }
