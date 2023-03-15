@@ -7,7 +7,7 @@ async fn main() -> std::io::Result<()> {
 
     HttpServer::new(|| {
         App::new()
-            .service(Files::new("/sendfile", "../assets/"))
+            .service(Files::new("/sendfile", "./assets/"))
             // Enable the logger.
             .wrap(Logger::default())
     })
